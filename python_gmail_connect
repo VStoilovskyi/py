@@ -1,0 +1,60 @@
+import imaplib
+import time
+import email
+from email.parser import Parser
+import smtplib
+import re
+from bs4 import BeautifulSoup
+SMTP_SERVER = "imap.gmail.com"
+SMTP_PORT = 993
+
+
+class Email(object):
+    def __init__(self, login_email, password):
+        self.login_email = login_email
+        self.smtp_server = SMTP_SERVER
+        self.password = password
+
+    def read_last_email(self):
+        """
+        Get last inbox email and return it as string
+        :return: string
+        """
+        try:
+            mail = imaplib.IMAP4_SSL('imap.gmail.com')
+            mail.login(self.login_email, self.password)
+            mail.list()
+            # Out: list of "folders" aka labels in gmail.
+            mail.select("inbox")  # connect to inbox.
+            result, data = mail.search(None, "ALL")
+            ids = data[0]  # data is a list.
+            id_list = ids.split()  # ids is a space separated string
+            latest_email_id = id_list[-1]  # get the latest
+            result, data = mail.fetch(latest_email_id, "(RFC822)")  # fetch the email body (RFC822) for the given ID
+            raw_email = data[0][1]  # here's the body, which is raw text of the whole email
+            # including headers and alternate payloads
+            convert_email_to_text = email.message_from_bytes(raw_email)
+            a = convert_email_to_text.get_payload()
+            remove_r = str(a).replace('\r', '')
+            return convert_email_to_text.get_payload()
+        except Exception as e:
+            print(str(e))
+
+    def get_link(self):
+        last_message = self.read_last_email()
+        soup = BeautifulSoup(last_message, "html.parser")
+        return soup.find('a').get('href')
+
+    def delete_all_email(self):
+        """
+        Remove all emails
+        """
+        mail = imaplib.IMAP4_SSL('imap.gmail.com')
+        mail.login(self.login_email, self.password)
+        mail.list()
+        # Out: list of "folders" aka labels in gmail.
+        mail.select("inbox")  # connect to inbox.
+        typ, data = mail.search(None, 'ALL')
+        for num in data[0].split():
+            mail.store(num, '+FLAGS', '\\Deleted')
+        mail.expunge()
